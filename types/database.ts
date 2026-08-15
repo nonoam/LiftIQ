@@ -1,341 +1,574 @@
-// Auto-generated types from Supabase schema — keep in sync with migrations
-
 export type Json =
   | string
   | number
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[];
+  | Json[]
 
-// ─── Enums ───────────────────────────────────────────────────────────────────
-
-export type MovementType = 'compound' | 'isolation';
-
-export type Equipment =
-  | 'barbell'
-  | 'dumbbell'
-  | 'cable'
-  | 'machine'
-  | 'smith_machine'
-  | 'bodyweight'
-  | 'kettlebell'
-  | 'resistance_band'
-  | 'ez_bar'
-  | 'trap_bar'
-  | 'pull_up_bar'
-  | 'dip_bars'
-  | 'other';
-
-export type Goal = 'strength' | 'hypertrophy' | 'endurance';
-
-export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
-
-export type ProgressionType = 'linear' | 'double' | 'undulating';
-
-export type WeightUnit = 'kg' | 'lbs';
-
-export type Theme = 'dark' | 'light' | 'system';
-
-export type MediaType = 'gif' | 'video' | 'image';
-
-export type BodyRegion = 'upper' | 'lower' | 'core';
-
-export type BodySide = 'anterior' | 'posterior' | 'both';
-
-// ─── Tables ──────────────────────────────────────────────────────────────────
-
-export interface MuscleGroup {
-  id: string;
-  name: string;
-  name_es: string | null;
-  slug: string;
-  body_region: BodyRegion;
-  body_side: BodySide | null;
-  svg_path_id: string | null;
-  color_hex: string;
-  created_at: string;
-}
-
-export interface Exercise {
-  id: string;
-  name: string;
-  name_es: string | null;
-  primary_muscle_group_id: string;
-  secondary_muscle_group_ids: string[];
-  movement_type: MovementType;
-  equipment: Equipment;
-  instructions: string | null;
-  is_custom: boolean;
-  created_by: string | null;
-  wger_id: number | null;
-  exercisedb_id: string | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  // Relations (joined)
-  primary_muscle_group?: MuscleGroup;
-  media?: ExerciseMedia[];
-}
-
-export interface ExerciseMedia {
-  id: string;
-  exercise_id: string;
-  media_type: MediaType;
-  url: string;
-  storage_path: string | null;
-  is_primary: boolean;
-  created_at: string;
-}
-
-export interface UserProfile {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-  avatar_url: string | null;
-  goal: Goal | null;
-  experience_level: ExperienceLevel | null;
-  default_rest_seconds: number;
-  progression_type: ProgressionType;
-  weight_unit: WeightUnit;
-  theme: Theme;
-  notification_reminder: boolean;
-  reminder_time: string | null;
-  is_premium: boolean;
-  onboarding_complete: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface BodyWeightEntry {
-  id: string;
-  user_id: string;
-  weight_kg: number;
-  recorded_at: string;
-  notes: string | null;
-  created_at: string;
-}
-
-export interface Routine {
-  id: string;
-  user_id: string;
-  name: string;
-  description: string | null;
-  estimated_duration_minutes: number | null;
-  is_archived: boolean;
-  created_at: string;
-  updated_at: string;
-  // Relations
-  routine_exercises?: RoutineExercise[];
-}
-
-export interface RoutineExercise {
-  id: string;
-  routine_id: string;
-  exercise_id: string;
-  position: number;
-  target_sets: number;
-  target_reps_min: number | null;
-  target_reps_max: number | null;
-  target_weight_kg: number | null;
-  target_rpe: number | null;
-  rest_seconds: number;
-  notes: string | null;
-  created_at: string;
-  // Relations
-  exercise?: Exercise;
-}
-
-export interface WorkoutSession {
-  id: string;
-  user_id: string;
-  routine_id: string | null;
-  name: string;
-  notes: string | null;
-  started_at: string;
-  finished_at: string | null;
-  duration_seconds: number | null;
-  body_weight_kg: number | null;
-  is_synced: boolean;
-  created_at: string;
-  updated_at: string;
-  // Relations
-  workout_sets?: WorkoutSet[];
-}
-
-export interface WorkoutSet {
-  id: string;
-  session_id: string;
-  exercise_id: string;
-  set_number: number;
-  weight_kg: number | null;
-  reps: number | null;
-  rpe: number | null;
-  is_warmup: boolean;
-  is_dropset: boolean;
-  is_failure: boolean;
-  notes: string | null;
-  completed_at: string;
-  created_at: string;
-  // Relations
-  exercise?: Exercise;
-}
-
-export interface ProgressPrediction {
-  id: string;
-  user_id: string;
-  exercise_id: string;
-  suggested_weight_kg: number | null;
-  suggested_reps_min: number | null;
-  suggested_reps_max: number | null;
-  suggested_sets: number | null;
-  progression_type: ProgressionType;
-  is_deload_suggested: boolean;
-  plateau_detected: boolean;
-  consecutive_weeks_no_progress: number;
-  confidence_score: number | null;
-  reasoning: string | null;
-  based_on_sessions: number;
-  generated_at: string;
-  expires_at: string;
-  used_at: string | null;
-  // Relations
-  exercise?: Exercise;
-}
-
-export interface AiConversation {
-  id: string;
-  user_id: string;
-  title: string | null;
-  messages: Json;
-  context: Json | null;
-  is_archived: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-// ─── View types ───────────────────────────────────────────────────────────────
-
-export interface UserExerciseHistoryRow {
-  user_id: string;
-  exercise_id: string;
-  exercise_name: string;
-  session_id: string;
-  started_at: string;
-  routine_id: string | null;
-  set_id: string;
-  set_number: number;
-  weight_kg: number | null;
-  reps: number | null;
-  rpe: number | null;
-  is_warmup: boolean;
-  is_dropset: boolean;
-  is_failure: boolean;
-  estimated_1rm: number | null;
-  set_volume_kg: number | null;
-}
-
-export interface WeeklyVolumeByMuscleRow {
-  user_id: string;
-  muscle_group_id: string;
-  muscle_group_name: string;
-  muscle_group_slug: string;
-  week_start: string;
-  total_volume_kg: number;
-  total_sets: number;
-  session_count: number;
-  training_days: number;
-}
-
-// ─── Database type (for Supabase generics) ───────────────────────────────────
-// Each table needs Row, Insert, and Update types for Supabase client to infer correctly
-
-type Insertable<T extends { id: string; created_at: string }> = Omit<T, 'id' | 'created_at'> & {
-  id?: string;
-  created_at?: string;
-};
-type Updatable<T> = Partial<T>;
-
-export interface Database {
+export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
-      muscle_groups: {
-        Row:    MuscleGroup;
-        Insert: Insertable<MuscleGroup>;
-        Update: Updatable<MuscleGroup>;
-      };
       exercises: {
-        Row:    Exercise;
-        Insert: Omit<Exercise, 'id' | 'created_at' | 'updated_at' | 'primary_muscle_group' | 'media'> & { id?: string; created_at?: string; updated_at?: string };
-        Update: Updatable<Omit<Exercise, 'primary_muscle_group' | 'media'>>;
-      };
-      exercise_media: {
-        Row:    ExerciseMedia;
-        Insert: Omit<ExerciseMedia, 'id' | 'created_at'> & { id?: string; created_at?: string };
-        Update: Updatable<ExerciseMedia>;
-      };
-      user_profiles: {
-        Row:    UserProfile;
-        Insert: Omit<UserProfile, 'created_at' | 'updated_at'> & { created_at?: string; updated_at?: string };
-        Update: Updatable<UserProfile>;
-      };
-      body_weight_history: {
-        Row:    BodyWeightEntry;
-        Insert: Omit<BodyWeightEntry, 'id' | 'created_at'> & { id?: string; created_at?: string };
-        Update: Updatable<BodyWeightEntry>;
-      };
-      routines: {
-        Row:    Routine;
-        Insert: Omit<Routine, 'id' | 'created_at' | 'updated_at' | 'routine_exercises'> & { id?: string; created_at?: string; updated_at?: string };
-        Update: Updatable<Omit<Routine, 'routine_exercises'>>;
-      };
+        Row: {
+          created_at: string
+          equipment: Database["public"]["Enums"]["equipment"]
+          id: string
+          is_active: boolean
+          is_custom: boolean
+          muscle_group: Database["public"]["Enums"]["muscle_group"]
+          name: string
+          owner_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          equipment: Database["public"]["Enums"]["equipment"]
+          id?: string
+          is_active?: boolean
+          is_custom?: boolean
+          muscle_group: Database["public"]["Enums"]["muscle_group"]
+          name: string
+          owner_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          equipment?: Database["public"]["Enums"]["equipment"]
+          id?: string
+          is_active?: boolean
+          is_custom?: boolean
+          muscle_group?: Database["public"]["Enums"]["muscle_group"]
+          name?: string
+          owner_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          default_rest_seconds: number
+          display_name: string | null
+          id: string
+          onboarding_complete: boolean
+          updated_at: string
+          weight_unit: Database["public"]["Enums"]["weight_unit"]
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          default_rest_seconds?: number
+          display_name?: string | null
+          id: string
+          onboarding_complete?: boolean
+          updated_at?: string
+          weight_unit?: Database["public"]["Enums"]["weight_unit"]
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          default_rest_seconds?: number
+          display_name?: string | null
+          id?: string
+          onboarding_complete?: boolean
+          updated_at?: string
+          weight_unit?: Database["public"]["Enums"]["weight_unit"]
+        }
+        Relationships: []
+      }
       routine_exercises: {
-        Row:    RoutineExercise;
-        Insert: Omit<RoutineExercise, 'id' | 'created_at' | 'exercise'> & { id?: string; created_at?: string };
-        Update: Updatable<Omit<RoutineExercise, 'exercise'>>;
-      };
+        Row: {
+          created_at: string
+          exercise_id: string
+          id: string
+          notes: string | null
+          position: number
+          rest_seconds: number | null
+          routine_id: string
+          target_reps_max: number | null
+          target_reps_min: number | null
+          target_rir: number | null
+          target_sets: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercise_id: string
+          id?: string
+          notes?: string | null
+          position: number
+          rest_seconds?: number | null
+          routine_id: string
+          target_reps_max?: number | null
+          target_reps_min?: number | null
+          target_rir?: number | null
+          target_sets?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exercise_id?: string
+          id?: string
+          notes?: string | null
+          position?: number
+          rest_seconds?: number | null
+          routine_id?: string
+          target_reps_max?: number | null
+          target_reps_min?: number | null
+          target_rir?: number | null
+          target_sets?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routine_exercises_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routines: {
+        Row: {
+          created_at: string
+          id: string
+          is_archived: boolean
+          name: string
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          name: string
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          name?: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      session_exercises: {
+        Row: {
+          created_at: string
+          exercise_id: string
+          id: string
+          notes: string | null
+          position: number
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercise_id: string
+          id?: string
+          notes?: string | null
+          position: number
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exercise_id?: string
+          id?: string
+          notes?: string | null
+          position?: number
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_exercises_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "v_exercise_last_performance"
+            referencedColumns: ["session_id"]
+          },
+          {
+            foreignKeyName: "session_exercises_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "v_session_summary"
+            referencedColumns: ["session_id"]
+          },
+          {
+            foreignKeyName: "session_exercises_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workout_sessions: {
-        Row:    WorkoutSession;
-        Insert: Omit<WorkoutSession, 'created_at' | 'updated_at' | 'workout_sets'> & { id?: string; created_at?: string; updated_at?: string };
-        Update: Updatable<Omit<WorkoutSession, 'workout_sets'>>;
-      };
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          finished_at: string | null
+          id: string
+          name: string
+          notes: string | null
+          routine_id: string | null
+          started_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          finished_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          routine_id?: string | null
+          started_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          finished_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          routine_id?: string | null
+          started_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_sessions_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workout_sets: {
-        Row:    WorkoutSet;
-        Insert: Omit<WorkoutSet, 'id' | 'created_at' | 'exercise'> & { id?: string; created_at?: string };
-        Update: Updatable<Omit<WorkoutSet, 'exercise'>>;
-      };
-      progress_predictions: {
-        Row:    ProgressPrediction;
-        Insert: Omit<ProgressPrediction, 'id' | 'generated_at' | 'exercise'> & { id?: string; generated_at?: string };
-        Update: Updatable<Omit<ProgressPrediction, 'exercise'>>;
-      };
-      ai_conversations: {
-        Row:    AiConversation;
-        Insert: Omit<AiConversation, 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string };
-        Update: Updatable<AiConversation>;
-      };
-    };
+        Row: {
+          completed_at: string
+          created_at: string
+          id: string
+          notes: string | null
+          reps: number | null
+          rir: number | null
+          session_exercise_id: string
+          set_number: number
+          set_type: Database["public"]["Enums"]["set_type"]
+          user_id: string
+          weight_kg: number | null
+        }
+        Insert: {
+          completed_at?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reps?: number | null
+          rir?: number | null
+          session_exercise_id: string
+          set_number: number
+          set_type?: Database["public"]["Enums"]["set_type"]
+          user_id: string
+          weight_kg?: number | null
+        }
+        Update: {
+          completed_at?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reps?: number | null
+          rir?: number | null
+          session_exercise_id?: string
+          set_number?: number
+          set_type?: Database["public"]["Enums"]["set_type"]
+          user_id?: string
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_sets_session_exercise_id_fkey"
+            columns: ["session_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "session_exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
     Views: {
-      user_exercise_history: {
-        Row: UserExerciseHistoryRow;
-      };
-      weekly_volume_by_muscle: {
-        Row: WeeklyVolumeByMuscleRow;
-      };
-    };
+      v_exercise_last_performance: {
+        Row: {
+          exercise_id: string | null
+          performed_at: string | null
+          session_id: string | null
+          sets: Json | null
+          top_weight_kg: number | null
+          user_id: string | null
+          working_sets: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_session_summary: {
+        Row: {
+          duration_seconds: number | null
+          exercise_count: number | null
+          finished_at: string | null
+          name: string | null
+          session_id: string | null
+          started_at: string | null
+          total_volume_kg: number | null
+          user_id: string | null
+          working_set_count: number | null
+        }
+        Relationships: []
+      }
+    }
     Functions: {
-      calculate_estimated_1rm: {
-        Args: { weight: number; reps: number };
-        Returns: number;
-      };
-      calculate_epley_1rm: {
-        Args: { weight: number; reps: number };
-        Returns: number;
-      };
-      calculate_brzycki_1rm: {
-        Args: { weight: number; reps: number };
-        Returns: number;
-      };
-    };
-  };
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+    }
+    Enums: {
+      equipment:
+        | "barbell"
+        | "dumbbell"
+        | "machine"
+        | "cable"
+        | "bodyweight"
+        | "kettlebell"
+        | "band"
+        | "other"
+      muscle_group:
+        | "chest"
+        | "back"
+        | "shoulders"
+        | "biceps"
+        | "triceps"
+        | "forearms"
+        | "quads"
+        | "hamstrings"
+        | "glutes"
+        | "calves"
+        | "core"
+        | "full_body"
+      set_type: "working" | "warmup" | "dropset" | "failure"
+      weight_unit: "kg" | "lb"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
+  public: {
+    Enums: {
+      equipment: [
+        "barbell",
+        "dumbbell",
+        "machine",
+        "cable",
+        "bodyweight",
+        "kettlebell",
+        "band",
+        "other",
+      ],
+      muscle_group: [
+        "chest",
+        "back",
+        "shoulders",
+        "biceps",
+        "triceps",
+        "forearms",
+        "quads",
+        "hamstrings",
+        "glutes",
+        "calves",
+        "core",
+        "full_body",
+      ],
+      set_type: ["working", "warmup", "dropset", "failure"],
+      weight_unit: ["kg", "lb"],
+    },
+  },
+} as const
+

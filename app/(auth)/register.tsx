@@ -1,126 +1,149 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ScrollView, Alert,
-} from 'react-native';
-import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
-import { captureError } from '@/lib/sentry';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
+
+import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Input } from '@/components/ui/Input';
+import { Screen } from '@/components/ui/Screen';
+import { signUpWithEmail } from '@/lib/auth';
+import { colors, spacing, typography } from '@/theme/tokens';
+
+const MIN_PASSWORD_LENGTH = 6;
 
 export default function RegisterScreen() {
+  const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
-  async function handleRegister() {
-    if (!name.trim() || !email.trim() || !password) {
-      Alert.alert('Error', 'Please fill in all fields.');
+  const passwordTooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
+  const canSubmit =
+    name.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.length >= MIN_PASSWORD_LENGTH &&
+    !busy;
+
+  async function handleSubmit() {
+    if (!canSubmit) return;
+    setBusy(true);
+    setError(null);
+
+    const { error: authError, needsConfirmation } = await signUpWithEmail(email, password, name);
+
+    if (authError) {
+      setError(authError);
+      setBusy(false);
       return;
     }
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters.');
-      return;
+    if (needsConfirmation) {
+      setAwaitingConfirmation(true);
+      setBusy(false);
     }
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: { data: { full_name: name.trim() } },
-      });
-      if (error) throw error;
-      // Profile is auto-created by DB trigger
-      router.replace('/(auth)/onboarding');
-    } catch (err) {
-      captureError(err);
-      Alert.alert('Registration failed', err instanceof Error ? err.message : 'An error occurred.');
-    } finally {
-      setLoading(false);
-    }
+    // Otherwise the session is live and the root navigator takes over.
+  }
+
+  if (awaitingConfirmation) {
+    return (
+      <Screen title="Revisa tu email">
+        <EmptyState
+          title="Te hemos enviado un enlace"
+          message={`Confirma tu cuenta desde el email que hemos mandado a ${email.trim()} y vuelve para entrar.`}
+          actionLabel="Ir a entrar"
+          onAction={() => router.replace('/(auth)/login')}
+        />
+      </Screen>
+    );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#09090B]">
+    <Screen title="Crear cuenta" subtitle="Tus entrenos, en tu cuenta">
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
-          <View className="flex-1 px-6 pt-8 pb-8 gap-8">
-            <View className="gap-2">
-              <TouchableOpacity onPress={() => router.back()} className="self-start mb-2">
-                <Text className="text-[#A1A1AA] text-base">← Back</Text>
-              </TouchableOpacity>
-              <Text className="text-3xl font-bold text-white">Create account</Text>
-              <Text className="text-[#A1A1AA]">Start tracking your progress today</Text>
-            </View>
+          <Input
+            label="Nombre"
+            value={name}
+            onChangeText={setName}
+            placeholder="¿Cómo te llamamos?"
+            autoCapitalize="words"
+            autoComplete="name"
+            returnKeyType="next"
+          />
+          <Input
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="tu@email.com"
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            returnKeyType="next"
+          />
+          <Input
+            label="Contraseña"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Mínimo 6 caracteres"
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+            textContentType="newPassword"
+            returnKeyType="go"
+            onSubmitEditing={handleSubmit}
+            error={passwordTooShort ? `Al menos ${MIN_PASSWORD_LENGTH} caracteres.` : null}
+          />
 
-            <View className="gap-4">
-              <View className="gap-2">
-                <Text className="text-[#A1A1AA] text-sm font-medium">Full name</Text>
-                <TextInput
-                  className="bg-[#27272A] rounded-xl px-4 py-3.5 text-white text-base"
-                  placeholder="Your name"
-                  placeholderTextColor="#52525B"
-                  value={name}
-                  onChangeText={setName}
-                  autoComplete="name"
-                />
-              </View>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
-              <View className="gap-2">
-                <Text className="text-[#A1A1AA] text-sm font-medium">Email</Text>
-                <TextInput
-                  className="bg-[#27272A] rounded-xl px-4 py-3.5 text-white text-base"
-                  placeholder="you@example.com"
-                  placeholderTextColor="#52525B"
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoComplete="email"
-                />
-              </View>
+          <Button
+            label="Crear cuenta"
+            size="lg"
+            onPress={handleSubmit}
+            disabled={!canSubmit}
+            loading={busy}
+          />
 
-              <View className="gap-2">
-                <Text className="text-[#A1A1AA] text-sm font-medium">Password</Text>
-                <TextInput
-                  className="bg-[#27272A] rounded-xl px-4 py-3.5 text-white text-base"
-                  placeholder="Min. 6 characters"
-                  placeholderTextColor="#52525B"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  autoComplete="new-password"
-                />
-              </View>
-
-              <TouchableOpacity
-                className={`rounded-2xl py-4 items-center mt-2 ${loading ? 'bg-primary/50' : 'bg-primary'}`}
-                onPress={handleRegister}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                <Text className="text-white font-bold text-base">
-                  {loading ? 'Creating account...' : 'Create Account'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View className="flex-row justify-center gap-1 mt-auto">
-              <Text className="text-[#A1A1AA]">Already have an account?</Text>
-              <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
-                <Text className="text-primary font-semibold">Sign in</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <Text style={styles.footer}>
+            ¿Ya tienes cuenta?{' '}
+            <Text style={styles.link} onPress={() => router.replace('/(auth)/login')}>
+              Entrar
+            </Text>
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  content: {
+    gap: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  error: {
+    ...typography.body,
+    color: colors.danger,
+  },
+  footer: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  link: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+});

@@ -1,169 +1,155 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ScrollView, Alert,
-} from 'react-native';
-import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
-import { captureError } from '@/lib/sentry';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Screen } from '@/components/ui/Screen';
+import { signInWithEmail, signInWithGoogle } from '@/lib/auth';
+import { isGoogleAuthEnabled } from '@/lib/env';
+import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  async function handleEmailLogin() {
-    if (!email.trim() || !password) {
-      Alert.alert('Error', 'Please enter your email and password.');
-      return;
-    }
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) throw error;
-      router.replace('/(tabs)');
-    } catch (err) {
-      captureError(err);
-      Alert.alert('Login failed', err instanceof Error ? err.message : 'An error occurred.');
-    } finally {
-      setLoading(false);
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !busy;
+
+  async function handleSubmit() {
+    if (!canSubmit) return;
+    setBusy(true);
+    setError(null);
+    const { error: authError } = await signInWithEmail(email, password);
+    // On success the auth listener swaps the navigator, so this screen
+    // unmounts; only reset state when we are still here.
+    if (authError) {
+      setError(authError);
+      setBusy(false);
     }
   }
 
-  async function handleGoogleLogin() {
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: 'liftiq://auth/callback' },
-      });
-      if (error) throw error;
-    } catch (err) {
-      captureError(err);
-      Alert.alert('Error', 'Google sign in failed.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleAppleLogin() {
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: { redirectTo: 'liftiq://auth/callback' },
-      });
-      if (error) throw error;
-    } catch (err) {
-      captureError(err);
-      Alert.alert('Error', 'Apple sign in failed.');
-    } finally {
-      setLoading(false);
-    }
+  async function handleGoogle() {
+    setBusy(true);
+    setError(null);
+    const { error: authError } = await signInWithGoogle();
+    if (authError) setError(authError);
+    setBusy(false);
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#09090B]">
+    <Screen title="Entrar" subtitle="Accede a tus entrenos">
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
-          <View className="flex-1 px-6 pt-8 pb-8 gap-8">
-            {/* Header */}
-            <View className="gap-2">
-              <TouchableOpacity onPress={() => router.back()} className="self-start mb-2">
-                <Text className="text-[#A1A1AA] text-base">← Back</Text>
-              </TouchableOpacity>
-              <Text className="text-3xl font-bold text-white">Welcome back</Text>
-              <Text className="text-[#A1A1AA]">Sign in to continue your journey</Text>
-            </View>
+          <Input
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="tu@email.com"
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            returnKeyType="next"
+          />
+          <Input
+            label="Contraseña"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="current-password"
+            textContentType="password"
+            returnKeyType="go"
+            onSubmitEditing={handleSubmit}
+          />
 
-            {/* Social Auth */}
-            <View className="gap-3">
-              {Platform.OS === 'ios' && (
-                <TouchableOpacity
-                  className="flex-row items-center justify-center gap-3 bg-white rounded-2xl py-4"
-                  onPress={handleAppleLogin}
-                  disabled={loading}
-                  activeOpacity={0.85}
-                >
-                  <Text className="text-black font-semibold text-base">Sign in with Apple</Text>
-                </TouchableOpacity>
-              )}
+          <Link href="/(auth)/forgot-password" style={styles.forgot}>
+            ¿Has olvidado la contraseña?
+          </Link>
 
-              <TouchableOpacity
-                className="flex-row items-center justify-center gap-3 bg-[#27272A] rounded-2xl py-4"
-                onPress={handleGoogleLogin}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                <Text className="text-white font-semibold text-base">Sign in with Google</Text>
-              </TouchableOpacity>
-            </View>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
-            {/* Divider */}
-            <View className="flex-row items-center gap-4">
-              <View className="flex-1 h-px bg-[#27272A]" />
-              <Text className="text-[#71717A] text-sm">or</Text>
-              <View className="flex-1 h-px bg-[#27272A]" />
-            </View>
+          <Button label="Entrar" size="lg" onPress={handleSubmit} disabled={!canSubmit} loading={busy} />
 
-            {/* Email/Password */}
-            <View className="gap-4">
-              <View className="gap-2">
-                <Text className="text-[#A1A1AA] text-sm font-medium">Email</Text>
-                <TextInput
-                  className="bg-[#27272A] rounded-xl px-4 py-3.5 text-white text-base"
-                  placeholder="you@example.com"
-                  placeholderTextColor="#52525B"
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoComplete="email"
-                />
+          {isGoogleAuthEnabled ? (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.line} />
+                <Text style={styles.dividerText}>o</Text>
+                <View style={styles.line} />
               </View>
+              <Button
+                label="Continuar con Google"
+                size="lg"
+                variant="secondary"
+                onPress={handleGoogle}
+                disabled={busy}
+                icon={<Ionicons name="logo-google" size={18} color={colors.text} />}
+              />
+            </>
+          ) : null}
 
-              <View className="gap-2">
-                <Text className="text-[#A1A1AA] text-sm font-medium">Password</Text>
-                <TextInput
-                  className="bg-[#27272A] rounded-xl px-4 py-3.5 text-white text-base"
-                  placeholder="••••••••"
-                  placeholderTextColor="#52525B"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  autoComplete="current-password"
-                />
-              </View>
-
-              <TouchableOpacity
-                className={`rounded-2xl py-4 items-center ${loading ? 'bg-primary/50' : 'bg-primary'}`}
-                onPress={handleEmailLogin}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                <Text className="text-white font-bold text-base">
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Register link */}
-            <View className="flex-row justify-center gap-1 mt-auto">
-              <Text className="text-[#A1A1AA]">Don't have an account?</Text>
-              <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-                <Text className="text-primary font-semibold">Sign up</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <Text style={styles.footer}>
+            ¿No tienes cuenta?{' '}
+            <Text style={styles.link} onPress={() => router.replace('/(auth)/register')}>
+              Crear una
+            </Text>
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  content: {
+    gap: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  forgot: {
+    ...typography.label,
+    color: colors.primary,
+    textAlign: 'right',
+  },
+  error: {
+    ...typography.body,
+    color: colors.danger,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  line: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    ...typography.caption,
+    color: colors.textFaint,
+  },
+  footer: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  link: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+});

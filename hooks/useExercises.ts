@@ -1,108 +1,81 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { useAuth } from '@/hooks/useAuth';
 import { queryKeys } from '@/lib/queryClient';
-import type { ExerciseFilters } from '@/types';
-import type { Exercise, MuscleGroup } from '@/types/database';
+import { supabase } from '@/lib/supabase';
+import type { Equipment, Exercise, MuscleGroup } from '@/types/models';
 
-export function useExercises(filters: ExerciseFilters) {
+type Filters = {
+  search: string;
+  muscleGroup: MuscleGroup | null;
+  equipment: Equipment | null;
+};
+
+export function useExercises({ search, muscleGroup, equipment }: Filters) {
   return useQuery({
-    queryKey: queryKeys.exercises.list({
-      muscleGroupId: filters.muscleGroupId,
-      equipment:     filters.equipment,
-      movementType:  filters.movementType,
-      searchQuery:   filters.searchQuery,
-    }),
-    queryFn: async () => {
-      let query = supabase
-        .from('exercises')
-        .select(`
-          *,
-          primary_muscle_group:muscle_groups!exercises_primary_muscle_group_id_fkey(*),
-          media:exercise_media(*)
-        `)
-        .eq('is_active', true)
-        .order('name');
+    queryKey: queryKeys.exercises(search.trim(), muscleGroup, equipment),
+    // The catalogue is ~85 static rows plus the user's own; there is no point
+    // refetching it every time the picker opens.
+    staleTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<Exercise[]> => {
+      let query = supabase.from('exercises').select('*').eq('is_active', true);
 
-      if (filters.muscleGroupId) {
-        query = query.eq('primary_muscle_group_id', filters.muscleGroupId);
+      const term = search.trim();
+      if (term) {
+        // Backed by the gin_trgm_ops index on name, so this stays fast and
+        // tolerates partial words ("press incl").
+        query = query.ilike('name', `%${term}%`);
       }
-      if (filters.equipment) {
-        query = query.eq('equipment', filters.equipment);
-      }
-      if (filters.movementType) {
-        query = query.eq('movement_type', filters.movementType);
-      }
-      if (filters.searchQuery.trim()) {
-        query = query.ilike('name', `%${filters.searchQuery.trim()}%`);
-      }
+      if (muscleGroup) query = query.eq('muscle_group', muscleGroup);
+      if (equipment) query = query.eq('equipment', equipment);
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as unknown as Exercise[];
-    },
-    staleTime: 1000 * 60 * 10, // 10 min — catalog rarely changes
-  });
-}
+      // Custom exercises first: if the user bothered to create one, it is the
+      // one they are looking for.
+      const { data, error } = await query
+        .order('is_custom', { ascending: false })
+        .order('name', { ascending: true })
+        .limit(200);
 
-export function useExercise(id: string) {
-  return useQuery({
-    queryKey: queryKeys.exercises.detail(id),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('exercises')
-        .select(`
-          *,
-          primary_muscle_group:muscle_groups!exercises_primary_muscle_group_id_fkey(*),
-          media:exercise_media(*)
-        `)
-        .eq('id', id)
-        .single();
-      if (error) throw error;
-      return data as Exercise;
-    },
-    enabled: !!id,
-  });
-}
-
-export function useMuscleGroups() {
-  return useQuery({
-    queryKey: queryKeys.muscleGroups,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('muscle_groups')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return (data ?? []) as unknown as MuscleGroup[];
-    },
-    staleTime: Infinity,
-  });
-}
-
-export function useCreateCustomExercise() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: {
-      name: string;
-      primary_muscle_group_id: string;
-      secondary_muscle_group_ids: string[];
-      movement_type: 'compound' | 'isolation';
-      equipment: string;
-      instructions?: string;
-    }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { data, error } = await supabase
-        .from('exercises')
-        .insert({ ...payload, is_custom: true, created_by: user.id } as never)
-        .select()
-        .single();
       if (error) throw error;
       return data;
     },
+  });
+}
+
+export function useCreateExercise() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (input: {
+      name: string;
+      muscleGroup: MuscleGroup;
+      equipment: Equipment;
+    }): Promise<Exercise> => {
+      const { data, error } = await supabase
+        .from('exercises')
+        .insert({
+          name: input.name.trim(),
+          muscle_group: input.muscleGroup,
+          equipment: input.equipment,
+          is_custom: true,
+          owner_id: user!.id,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        // The partial unique index on (owner_id, lower(name)) surfaces as a
+        // raw Postgres error; turn it into something a human can act on.
+        if (error.code === '23505') {
+          throw new Error('Ya tienes un ejercicio con ese nombre.');
+        }
+        throw error;
+      }
+      return data;
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.exercises.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.exercisesAll });
     },
   });
 }

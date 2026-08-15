@@ -1,44 +1,51 @@
+import 'react-native-url-polyfill/auto';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
+import { AppState } from 'react-native';
+
+import { env } from '@/lib/env';
 import type { Database } from '@/types/database';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.EXPO_PUBLIC_SUPABASE_KEY!;
-
-// SecureStore adapter for Supabase Auth token persistence
-const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
-};
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+/**
+ * Supabase client.
+ *
+ * Session storage is AsyncStorage, deliberately NOT expo-secure-store:
+ * SecureStore caps values at 2048 bytes on Android and a Supabase JWT with
+ * claims can exceed that, which shows up as users being silently logged out
+ * at random. The token is a short-lived bearer credential on a device the
+ * user already controls, and every table is guarded by RLS.
+ *
+ * detectSessionInUrl is off because that is a browser-only OAuth flow; on
+ * native we complete sign-in with an id_token instead (see lib/auth.ts).
+ */
+export const supabase = createClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
   auth: {
-    storage: ExpoSecureStoreAdapter,
+    storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
   },
 });
 
-// Storage helpers
-export const STORAGE_BUCKETS = {
-  exerciseMedia: 'exercises-media',
-  avatars: 'avatars',
-} as const;
+/**
+ * Refreshing tokens on a timer while the app is backgrounded burns battery and
+ * the OS throttles it anyway. Drive the refresh loop off foreground state.
+ */
+let appStateSubscription: { remove: () => void } | null = null;
 
-export function getExerciseMediaUrl(storagePath: string): string {
-  const { data } = supabase.storage
-    .from(STORAGE_BUCKETS.exerciseMedia)
-    .getPublicUrl(storagePath);
-  return data.publicUrl;
-}
+export function startSupabaseAutoRefresh() {
+  if (appStateSubscription) return;
 
-export function getAvatarUrl(storagePath: string): string {
-  const { data } = supabase.storage
-    .from(STORAGE_BUCKETS.avatars)
-    .getPublicUrl(storagePath);
-  return data.publicUrl;
+  if (AppState.currentState === 'active') {
+    void supabase.auth.startAutoRefresh();
+  }
+
+  appStateSubscription = AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
+      void supabase.auth.startAutoRefresh();
+    } else {
+      void supabase.auth.stopAutoRefresh();
+    }
+  });
 }

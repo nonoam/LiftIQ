@@ -1,72 +1,63 @@
-import '~/global.css';
-import { useEffect } from 'react';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import * as SplashScreen from 'expo-splash-screen';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { queryClient } from '@/lib/queryClient';
-import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
-import { initSentry, setSentryUser, clearSentryUser } from '@/lib/sentry';
-import { registerForPushNotifications } from '@/lib/notifications';
 
-SplashScreen.preventAutoHideAsync();
-initSentry();
+import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import { queryClient } from '@/lib/queryClient';
+import { colors } from '@/theme/tokens';
+
+void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const { setSession, setLoading } = useAuthStore();
+  return (
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <StatusBar style="light" />
+          <RootNavigator />
+        </AuthProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
+  );
+}
 
+function RootNavigator() {
+  const { session, initialising } = useAuth();
+
+  // Hold the splash screen until the persisted session has been read. Routing
+  // before that is a guess, and guessing wrong flashes the login screen at
+  // users who are already signed in.
   useEffect(() => {
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setLoading(false);
+    if (!initialising) void SplashScreen.hideAsync();
+  }, [initialising]);
 
-        if (session?.user) {
-          setSentryUser(session.user.id, session.user.email);
-          await registerForPushNotifications();
-          // Fetch profile
-          const { data: profile } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          if (profile) useAuthStore.getState().setProfile(profile);
-        } else {
-          clearSentryUser();
-        }
-
-        SplashScreen.hideAsync();
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [setSession, setLoading]);
+  if (initialising) return null;
 
   return (
-    <GestureHandlerRootView className="flex-1">
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#09090B' } }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="workout/[sessionId]"
-              options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
-            />
-            <Stack.Screen
-              name="workout/complete"
-              options={{ presentation: 'fullScreenModal' }}
-            />
-            <Stack.Screen name="exercise/[exerciseId]" />
-            <Stack.Screen name="routine/[routineId]" />
-          </Stack>
-        </QueryClientProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.bg },
+        animation: 'slide_from_right',
+      }}
+    >
+      <Stack.Protected guard={!!session}>
+        <Stack.Screen name="(app)" />
+        <Stack.Screen name="workout/active" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="workout/[id]" />
+        <Stack.Screen name="routine/[id]" />
+        <Stack.Screen
+          name="exercise-picker"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+      </Stack.Protected>
+
+      <Stack.Protected guard={!session}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+    </Stack>
   );
 }

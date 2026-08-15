@@ -1,214 +1,213 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { useAuth } from '@/hooks/useAuth';
 import { queryKeys } from '@/lib/queryClient';
-import { useAuthStore } from '@/stores/authStore';
-import type { Routine, RoutineExercise } from '@/types/database';
+import { supabase } from '@/lib/supabase';
+import { newId } from '@/lib/uuid';
+import type { Exercise, Routine, RoutineExercise } from '@/types/models';
+
+export type RoutineWithExercises = Routine & {
+  routine_exercises: (RoutineExercise & { exercise: Exercise })[];
+};
+
+const ROUTINE_SELECT = `
+  *,
+  routine_exercises (
+    *,
+    exercise:exercises (*)
+  )
+`;
+
+function sortExercises(routine: RoutineWithExercises): RoutineWithExercises {
+  return {
+    ...routine,
+    routine_exercises: [...routine.routine_exercises].sort((a, b) => a.position - b.position),
+  };
+}
 
 export function useRoutines() {
-  const userId = useAuthStore((s) => s.user?.id ?? '');
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: queryKeys.routines.all(userId),
-    queryFn: async () => {
+    queryKey: queryKeys.routines,
+    enabled: Boolean(user),
+    queryFn: async (): Promise<RoutineWithExercises[]> => {
       const { data, error } = await supabase
         .from('routines')
-        .select('*, routine_exercises(*, exercise:exercises(*, primary_muscle_group:muscle_groups(*), media:exercise_media(*)))')
-        .eq('user_id', userId)
+        .select(ROUTINE_SELECT)
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
+
       if (error) throw error;
-      return (data ?? []) as unknown as Routine[];
+      return (data as RoutineWithExercises[]).map(sortExercises);
     },
-    enabled: !!userId,
   });
 }
 
-export function useRoutine(id: string) {
+export function useRoutine(routineId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.routines.detail(id),
-    queryFn: async () => {
+    queryKey: queryKeys.routine(routineId ?? ''),
+    enabled: Boolean(routineId),
+    queryFn: async (): Promise<RoutineWithExercises> => {
       const { data, error } = await supabase
         .from('routines')
-        .select('*, routine_exercises(*, exercise:exercises(*, primary_muscle_group:muscle_groups(*), media:exercise_media(*)))')
-        .eq('id', id)
+        .select(ROUTINE_SELECT)
+        .eq('id', routineId!)
         .single();
       if (error) throw error;
-      const routine = data as unknown as Routine;
-      if (routine.routine_exercises) {
-        routine.routine_exercises.sort((a: RoutineExercise, b: RoutineExercise) => a.position - b.position);
-      }
-      return routine;
+      return sortExercises(data as RoutineWithExercises);
     },
-    enabled: !!id,
   });
 }
 
 export function useCreateRoutine() {
-  const qc = useQueryClient();
-  const userId = useAuthStore((s) => s.user?.id ?? '');
-  return useMutation({
-    mutationFn: async (name: string) => {
-      const { data, error } = await supabase
-        .from('routines')
-        .insert({ name, user_id: userId } as never)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Routine;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.routines.all(userId) }),
-  });
-}
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-export function useUpdateRoutine() {
-  const qc = useQueryClient();
-  const userId = useAuthStore((s) => s.user?.id ?? '');
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Routine> & { id: string }) => {
+    mutationFn: async (name: string): Promise<Routine> => {
       const { data, error } = await supabase
         .from('routines')
-        .update(updates as never)
-        .eq('id', id)
+        .insert({ id: newId(), user_id: user!.id, name: name.trim() })
         .select()
         .single();
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: queryKeys.routines.all(userId) });
-      qc.invalidateQueries({ queryKey: queryKeys.routines.detail(vars.id) });
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routines });
+    },
+  });
+}
+
+export function useUpdateRoutine() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { id: string; name?: string; notes?: string | null }) => {
+      const { error } = await supabase
+        .from('routines')
+        .update({
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        })
+        .eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routine(variables.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routines });
     },
   });
 }
 
 export function useDeleteRoutine() {
-  const qc = useQueryClient();
-  const userId = useAuthStore((s) => s.user?.id ?? '');
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('routines').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.routines.all(userId) }),
-  });
-}
+  const queryClient = useQueryClient();
 
-export function useDuplicateRoutine() {
-  const qc = useQueryClient();
-  const userId = useAuthStore((s) => s.user?.id ?? '');
   return useMutation({
     mutationFn: async (routineId: string) => {
-      // Fetch original
-      const { data: originalData, error: fetchError } = await supabase
-        .from('routines')
-        .select('*, routine_exercises(*)')
-        .eq('id', routineId)
-        .single();
-      if (fetchError) throw fetchError;
-      const original = originalData as unknown as Routine;
-
-      // Create copy
-      const { data: newRoutineData, error: createError } = await supabase
-        .from('routines')
-        .insert({ name: `${original.name} (Copy)`, user_id: userId, description: original.description } as never)
-        .select()
-        .single();
-      if (createError) throw createError;
-      const newRoutine = newRoutineData as unknown as Routine;
-
-      // Copy exercises
-      if (original.routine_exercises?.length) {
-        const exercisesToInsert = original.routine_exercises.map((re: RoutineExercise) => ({
-          routine_id: newRoutine.id,
-          exercise_id: re.exercise_id,
-          position: re.position,
-          target_sets: re.target_sets,
-          target_reps_min: re.target_reps_min,
-          target_reps_max: re.target_reps_max,
-          target_weight_kg: re.target_weight_kg,
-          rest_seconds: re.rest_seconds,
-          notes: re.notes,
-        }));
-        const { error: exError } = await supabase.from('routine_exercises').insert(exercisesToInsert as never);
-        if (exError) throw exError;
-      }
-
-      return newRoutine;
+      const { error } = await supabase.from('routines').delete().eq('id', routineId);
+      if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.routines.all(userId) }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routines });
+    },
   });
 }
 
 export function useAddExerciseToRoutine() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
   return useMutation({
-    mutationFn: async ({
-      routineId, exerciseId, position, targetSets = 3, restSeconds = 90,
-    }: {
-      routineId: string; exerciseId: string; position: number;
-      targetSets?: number; restSeconds?: number;
-    }) => {
-      const { data, error } = await supabase
-        .from('routine_exercises')
-        .insert({ routine_id: routineId, exercise_id: exerciseId, position, target_sets: targetSets, rest_seconds: restSeconds } as never)
-        .select()
-        .single();
+    mutationFn: async (input: { routineId: string; exerciseId: string; position: number }) => {
+      const { error } = await supabase.from('routine_exercises').insert({
+        id: newId(),
+        routine_id: input.routineId,
+        user_id: user!.id,
+        exercise_id: input.exerciseId,
+        position: input.position,
+        target_sets: 3,
+      });
       if (error) throw error;
-      return data;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: queryKeys.routines.detail(vars.routineId) });
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routine(variables.routineId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routines });
     },
   });
 }
 
 export function useUpdateRoutineExercise() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: async ({
-      id, routineId, ...updates
-    }: Partial<RoutineExercise> & { id: string; routineId: string }) => {
-      const { data, error } = await supabase
-        .from('routine_exercises')
-        .update(updates as never)
-        .eq('id', id)
-        .select()
-        .single();
+    mutationFn: async (input: {
+      id: string;
+      routineId: string;
+      patch: Partial<
+        Pick<
+          RoutineExercise,
+          'target_sets' | 'target_reps_min' | 'target_reps_max' | 'target_rir' | 'rest_seconds' | 'notes'
+        >
+      >;
+    }) => {
+      const { error } = await supabase.from('routine_exercises').update(input.patch).eq('id', input.id);
       if (error) throw error;
-      return data;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: queryKeys.routines.detail(vars.routineId) });
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routine(variables.routineId) });
     },
   });
 }
 
-export function useRemoveExerciseFromRoutine() {
-  const qc = useQueryClient();
+export function useRemoveRoutineExercise() {
+  const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: async ({ id, routineId }: { id: string; routineId: string }) => {
-      const { error } = await supabase.from('routine_exercises').delete().eq('id', id);
+    mutationFn: async (input: { id: string; routineId: string }) => {
+      const { error } = await supabase.from('routine_exercises').delete().eq('id', input.id);
       if (error) throw error;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: queryKeys.routines.detail(vars.routineId) });
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routine(variables.routineId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routines });
     },
   });
 }
 
-/** Reorder exercises: update positions for all affected items */
+/**
+ * Reorder by rewriting every position in one request.
+ *
+ * The (routine_id, position) unique constraint is DEFERRABLE, so the
+ * intermediate states inside this transaction — where two rows briefly share
+ * a position — are allowed. Without that, a simple swap would fail.
+ */
 export function useReorderRoutineExercises() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
   return useMutation({
-    mutationFn: async ({
-      routineId, exercises,
-    }: { routineId: string; exercises: { id: string; position: number }[] }) => {
-      const updates = exercises.map(({ id, position }) =>
-        supabase.from('routine_exercises').update({ position } as never).eq('id', id)
-      );
-      await Promise.all(updates);
+    mutationFn: async (input: { routineId: string; orderedIds: string[] }) => {
+      const { data: existing, error: readError } = await supabase
+        .from('routine_exercises')
+        .select('*')
+        .eq('routine_id', input.routineId);
+      if (readError) throw readError;
+
+      const byId = new Map(existing.map((row) => [row.id, row]));
+      const rows = input.orderedIds
+        .map((id, index) => {
+          const row = byId.get(id);
+          return row ? { ...row, position: index, user_id: user!.id } : null;
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
+
+      const { error } = await supabase.from('routine_exercises').upsert(rows, { onConflict: 'id' });
+      if (error) throw error;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: queryKeys.routines.detail(vars.routineId) });
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.routine(variables.routineId) });
     },
   });
 }

@@ -1,24 +1,38 @@
-import { View, type ViewProps } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import type { ViewStyle } from 'react-native';
 
-interface CardProps extends ViewProps {
+import { colors, radius, spacing } from '@/theme/tokens';
+
+type Props = {
   children: React.ReactNode;
-  padding?: 'sm' | 'md' | 'lg' | 'none';
-}
-
-const paddingClasses = {
-  none: '',
-  sm:   'p-3',
-  md:   'p-4',
-  lg:   'p-5',
+  onPress?: () => void;
+  style?: ViewStyle;
 };
 
-export function Card({ children, padding = 'md', className, ...rest }: CardProps) {
+export function Card({ children, onPress, style }: Props) {
+  if (!onPress) {
+    return <View style={[styles.card, style]}>{children}</View>;
+  }
   return (
-    <View
-      className={`bg-[#18181B] rounded-2xl ${paddingClasses[padding]} ${className ?? ''}`}
-      {...rest}
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.card, pressed && styles.pressed, style]}
     >
       {children}
-    </View>
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    padding: spacing.lg,
+  },
+  pressed: {
+    backgroundColor: colors.surfaceAlt,
+  },
+});
