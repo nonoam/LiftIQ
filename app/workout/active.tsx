@@ -7,7 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ExerciseBlock } from '@/components/workout/ExerciseBlock';
+import type { RoutineTarget } from '@/components/workout/ExerciseBlock';
 import { useWeightUnit } from '@/hooks/useProfile';
+import { useRoutine } from '@/hooks/useRoutines';
 import {
   useActiveSession,
   useDeleteSet,
@@ -38,6 +40,23 @@ export default function ActiveWorkoutScreen() {
     [session],
   );
   const { data: lastPerformance } = useLastPerformance(exerciseIds);
+
+  // When the workout came from a routine, the targets it defines (sets, rep
+  // range, RIR) are what the user is trying to hit today, so they belong on
+  // this screen rather than buried in the routine editor.
+  const { data: routine } = useRoutine(session?.routine_id ?? undefined);
+  const targets = useMemo(() => {
+    const byExercise = new Map<string, RoutineTarget>();
+    for (const item of routine?.routine_exercises ?? []) {
+      byExercise.set(item.exercise_id, {
+        sets: item.target_sets,
+        repsMin: item.target_reps_min,
+        repsMax: item.target_reps_max,
+        rir: item.target_rir,
+      });
+    }
+    return byExercise;
+  }, [routine]);
 
   const elapsed = useElapsedSeconds(session?.started_at);
 
@@ -137,6 +156,7 @@ export default function ActiveWorkoutScreen() {
                 key={sessionExercise.id}
                 sessionExercise={sessionExercise}
                 lastPerformance={lastPerformance?.[sessionExercise.exercise_id]}
+                target={targets.get(sessionExercise.exercise_id)}
                 unit={unit}
                 savingSetNumber={
                   savingKey?.startsWith(sessionExercise.id)

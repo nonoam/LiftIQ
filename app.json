@@ -7,7 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.liftiq.app"
@@ -28,10 +27,17 @@
     "plugins": [
       "expo-router",
       "expo-web-browser",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8d59c4b9-2b52-46fe-bb6c-79ae615161d8"
+      }
     }
   }
 }

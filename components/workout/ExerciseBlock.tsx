@@ -11,9 +11,18 @@ import type { ActiveSessionExercise } from '@/hooks/useWorkoutSession';
 import type { LastPerformance, MuscleGroup, WeightUnit } from '@/types/models';
 import { MUSCLE_GROUP_LABEL } from '@/types/models';
 
+/** What the routine says this exercise should be today. */
+export type RoutineTarget = {
+  sets: number | null;
+  repsMin: number | null;
+  repsMax: number | null;
+  rir: number | null;
+};
+
 type Props = {
   sessionExercise: ActiveSessionExercise;
   lastPerformance: LastPerformance | undefined;
+  target?: RoutineTarget;
   unit: WeightUnit;
   savingSetNumber: number | null;
   onLogSet: (input: {
@@ -30,6 +39,7 @@ type Props = {
 export function ExerciseBlock({
   sessionExercise,
   lastPerformance,
+  target,
   unit,
   savingSetNumber,
   onLogSet,
@@ -48,7 +58,10 @@ export function ExerciseBlock({
   const pendingKey = draftKey(sessionExercise.id, pendingSetNumber);
   const pendingDraft = drafts[pendingKey];
 
-  const reference = referenceFor(lastPerformance, committed, pendingSetNumber);
+  const reference = referenceFor(lastPerformance, committed, pendingSetNumber, target);
+  const targetText = formatTarget(target);
+  // Progress against the routine's planned set count, e.g. "2/3 series".
+  const workingDone = committed.filter((s) => s.set_type !== 'warmup').length;
 
   // Prefill the open row from the reference so the common case — repeating
   // last week's numbers — is a single tap on the tick.
@@ -89,6 +102,23 @@ export function ExerciseBlock({
           <Ionicons name="ellipsis-horizontal" size={20} color={colors.textFaint} />
         </Pressable>
       </View>
+
+      {targetText ? (
+        <View style={styles.targetBar}>
+          <Ionicons name="flag-outline" size={13} color={colors.primary} />
+          <Text style={styles.targetText}>Objetivo: {targetText}</Text>
+          {target?.sets != null ? (
+            <Text
+              style={[
+                styles.targetProgress,
+                workingDone >= target.sets && styles.targetProgressDone,
+              ]}
+            >
+              {workingDone}/{target.sets}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
       {committed.map((set) => (
         <SetRow
@@ -159,6 +189,7 @@ function referenceFor(
   lastPerformance: LastPerformance | undefined,
   committed: ActiveSessionExercise['workout_sets'],
   setNumber: number,
+  target?: RoutineTarget,
 ): { weightKg: number | null; reps: number | null; rir: number | null } {
   const historical = lastPerformance?.sets.find((s) => s.set_number === setNumber);
   if (historical) {
@@ -178,7 +209,36 @@ function referenceFor(
     };
   }
 
+  // No history at all: fall back to what the routine asks for. The bottom of
+  // the rep range is the honest starting point — overshooting the target on a
+  // first attempt is how people pick a weight they cannot finish.
+  if (target) {
+    return { weightKg: null, reps: target.repsMin ?? target.repsMax, rir: target.rir };
+  }
+
   return { weightKg: null, reps: null, rir: null };
+}
+
+/** "3 × 8-12 @ RIR 2", skipping whichever parts the routine left unset. */
+function formatTarget(target: RoutineTarget | undefined): string | null {
+  if (!target) return null;
+
+  const parts: string[] = [];
+  if (target.sets != null) parts.push(`${target.sets} ×`);
+
+  if (target.repsMin != null && target.repsMax != null) {
+    parts.push(target.repsMin === target.repsMax ? `${target.repsMin}` : `${target.repsMin}-${target.repsMax}`);
+  } else if (target.repsMin != null) {
+    parts.push(`${target.repsMin}+`);
+  } else if (target.repsMax != null) {
+    parts.push(`hasta ${target.repsMax}`);
+  }
+
+  if (parts.length === 0 && target.rir == null) return null;
+
+  const base = parts.join(' ');
+  if (target.rir == null) return base;
+  return base.length > 0 ? `${base} @ RIR ${target.rir}` : `RIR ${target.rir}`;
 }
 
 const styles = StyleSheet.create({
@@ -215,5 +275,30 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  targetBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primarySoft,
+  },
+  targetText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+    flex: 1,
+  },
+  targetProgress: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  targetProgressDone: {
+    color: colors.success,
+    fontWeight: '700',
   },
 });

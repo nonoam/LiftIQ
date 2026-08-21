@@ -384,6 +384,28 @@ export type Database = {
       }
     }
     Functions: {
+      get_routine_exercise_weekly_reps: {
+        Args: { p_routine_id: string; p_timezone?: string; p_weeks?: number }
+        Returns: {
+          avg_rir: number
+          exercise_id: string
+          exercise_name: string
+          total_reps: number
+          total_sets: number
+          week_start: string
+        }[]
+      }
+      get_routine_weekly_reps: {
+        Args: { p_routine_id: string; p_timezone?: string; p_weeks?: number }
+        Returns: {
+          avg_rir: number
+          sessions: number
+          total_reps: number
+          total_sets: number
+          total_volume_kg: number
+          week_start: string
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
